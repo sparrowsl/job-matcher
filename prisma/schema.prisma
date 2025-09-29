@@ -1,0 +1,256 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User profiles
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cvs       CV[]
+  savedJobs SavedJob[]
+}
+
+// CV/Resume data
+model CV {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic Info
+  fullName       String
+  email          String
+  phone          String?
+  location       String?
+  summary        String?
+
+  // Professional Info
+  title          String?
+  yearsExperience Int     @default(0)
+
+  // Extracted Data
+  skills         String  // JSON array of skills
+  keywords       String  // JSON array of keywords
+
+  // File Info
+  fileName       String
+  fileUrl        String?
+  extractedText  String  @default("")
+
+  // AI Analysis
+  aiSummary      String?
+  aiSuggestions  String? // JSON array of improvement suggestions
+
+  // Metadata
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  isComplete     Boolean  @default(false)
+
+  // Relations
+  education      Education[]
+  experience     Experience[]
+  projects       Project[]
+  certifications Certification[]
+  matches        JobMatch[]
+}
+
+// Education entries
+model Education {
+  id          String   @id @default(cuid())
+  cvId        String
+  cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  institution String
+  degree      String
+  field       String?
+  startDate   DateTime?
+  endDate     DateTime?
+  current     Boolean  @default(false)
+  description String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Work experience entries
+model Experience {
+  id          String   @id @default(cuid())
+  cvId        String
+  cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  company     String
+  position    String
+  location    String?
+  startDate   DateTime?
+  endDate     DateTime?
+  current     Boolean  @default(false)
+  description String?
+  achievements String? // JSON array
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Projects
+model Project {
+  id          String   @id @default(cuid())
+  cvId        String
+  cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  technologies String? // JSON array
+  url         String?
+  startDate   DateTime?
+  endDate     DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Certifications
+model Certification {
+  id          String   @id @default(cuid())
+  cvId        String
+  cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+
+  name        String
+  issuer      String
+  issueDate   DateTime?
+  expiryDate  DateTime?
+  credentialId String?
+  credentialUrl String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Job listings
+model Job {
+  id              String   @id @default(cuid())
+
+  // Basic Info
+  title           String
+  company         String
+  location        String
+  description     String
+  requirements    String  // JSON array
+  responsibilities String? // JSON array
+
+  // Job Details
+  skills          String  // JSON array
+  keywords        String? // JSON array
+  type            String  @default("full-time") // full-time, part-time, contract, internship
+  remote          Boolean @default(false)
+
+  // Salary
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryCurrency  String  @default("USD")
+
+  // Application
+  applicationUrl  String
+  source          String  @default("manual") // manual, linkedin, indeed, etc.
+  externalId      String?
+
+  // Status
+  isActive        Boolean @default(true)
+  postedDate      DateTime @default(now())
+  expiryDate      DateTime?
+
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  matches         JobMatch[]
+  savedJobs       SavedJob[]
+}
+
+// Job matching results
+model JobMatch {
+  id              String   @id @default(cuid())
+  cvId            String
+  cv              CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // Matching Score
+  overallScore    Float
+  skillsScore     Float
+  experienceScore Float
+  educationScore  Float
+  keywordsScore   Float
+
+  // Match Details
+  matchingSkills  String  // JSON array
+  missingSkills   String  // JSON array
+  explanation     String?
+
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([cvId, jobId])
+}
+
+// Saved jobs for users
+model SavedJob {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  applied   Boolean  @default(false)
+  appliedAt DateTime?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, jobId])
+}
+
+// Chat conversations for CV building
+model ChatConversation {
+  id        String   @id @default(cuid())
+  cvId      String?
+
+  // Conversation state
+  currentStep String  @default("greeting") // greeting, basic_info, experience, education, skills, review
+  isComplete  Boolean @default(false)
+
+  // Collected data (JSON)
+  collectedData String @default("{}")
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  messages  ChatMessage[]
+}
+
+// Individual chat messages
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role           String          // user, assistant, system
+  content        String
+
+  createdAt      DateTime        @default(now())
+}
